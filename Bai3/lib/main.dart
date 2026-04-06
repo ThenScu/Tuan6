@@ -4,13 +4,9 @@ import 'Provider/SanPhamProvider.dart';
 import 'Model/SanPham.dart';
 
 void main() {
-  // Đảm bảo các plugin (như sqflite) được khởi tạo đúng cách trước khi chạy app
-  WidgetsFlutterBinding.ensureInitialized();
-
   runApp(
-    // Bọc Provider ở ngoài cùng để toàn bộ app có thể xài data
     ChangeNotifierProvider(
-      create: (_) => SanPhamProvider(),
+      create: (context) => SanPhamProvider()..fetchSanPhams(),
       child: const MyApp(),
     ),
   );
@@ -22,71 +18,122 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Quản lý Sản phẩm',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
-      home: const SanPhamScreen(),
+      debugShowCheckedModeBanner: false,
+      title: 'Quản Lý Sản Phẩm',
+      theme: ThemeData(primarySwatch: Colors.teal),
+      home: const QuanLySanPhamScreen(),
     );
   }
 }
 
-class SanPhamScreen extends StatelessWidget {
-  const SanPhamScreen({super.key});
+class QuanLySanPhamScreen extends StatelessWidget {
+  const QuanLySanPhamScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Lắng nghe dữ liệu từ Provider
+    // Gọi Provider để lấy danh sách
     final provider = Provider.of<SanPhamProvider>(context);
 
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text('Danh sách Sản phẩm'),
-        backgroundColor: Colors.blueAccent,
+        title: const Text('Quản Lý Sản Phẩm', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.teal,
       ),
-      body: FutureBuilder(
-        // Tự động load dữ liệu khi mở app
-        future: provider.fetchSanPhams(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting && provider.listSP.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: provider.listSP.isEmpty
+          ? const Center(child: Text("Chưa có sản phẩm nào trong Database!"))
+          : ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: provider.listSP.length,
+        itemBuilder: (context, index) {
+          final sp = provider.listSP[index];
 
-          if (provider.listSP.isEmpty) {
-            return const Center(child: Text('Chưa có sản phẩm nào, bấm nút + để thêm'));
-          }
-
-          return ListView.builder(
-            itemCount: provider.listSP.length,
-            itemBuilder: (context, index) {
-              final sp = provider.listSP[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                child: ListTile(
-                  leading: CircleAvatar(child: Text(sp.ma)),
-                  title: Text(sp.ten, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('Giá: ${sp.gia} | Thuế NK: ${sp.thueNhapKhau}'),
-                  trailing: Text('-${sp.giamGia}', style: const TextStyle(color: Colors.red)),
-                ),
-              );
-            },
+          return Card(
+            elevation: 3,
+            margin: const EdgeInsets.only(bottom: 12),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '[${sp.ma}] ${sp.ten}',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal),
+                  ),
+                  const Divider(),
+                  Text('Đơn giá: ${sp.gia} VNĐ'),
+                  Text('Giảm giá: ${sp.giamGia} VNĐ', style: const TextStyle(color: Colors.orange)),
+                  const SizedBox(height: 8),
+                  // Gọi phương thức thueNhapKhau từ Model của bro
+                  Text(
+                    'Thuế nhập khẩu (10%): ${sp.thueNhapKhau} VNĐ',
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                  ),
+                ],
+              ),
+            ),
           );
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Mockup dữ liệu để test, sau này bro làm cái Dialog nhập liệu là xịn luôn
-          final newSP = SanPham(
-            ma: 'SP0${provider.listSP.length + 1}',
-            ten: 'Sản phẩm ${provider.listSP.length + 1}',
-            gia: 1000.0,
-            giamGia: 100.0,
-          );
-          provider.addSanPham(newSP);
-        },
-        child: const Icon(Icons.add),
+        backgroundColor: Colors.teal,
+        onPressed: () => _showDialogThem(context),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
+    );
+  }
+
+  // Hàm hiển thị để nhập thông tin Sản Phẩm
+  void _showDialogThem(BuildContext context) {
+    final maCtrl = TextEditingController();
+    final tenCtrl = TextEditingController();
+    final giaCtrl = TextEditingController();
+    final giamGiaCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Thêm Sản Phẩm'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: maCtrl, decoration: const InputDecoration(labelText: 'Mã SP (Không trùng)')),
+                TextField(controller: tenCtrl, decoration: const InputDecoration(labelText: 'Tên Sản Phẩm')),
+                TextField(controller: giaCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Đơn Giá')),
+                TextField(controller: giamGiaCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Giảm Giá')),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                // Lấy dữ liệu và ép kiểu
+                double gia = double.tryParse(giaCtrl.text) ?? 0.0;
+                double giam = double.tryParse(giamGiaCtrl.text) ?? 0.0;
+                String ma = maCtrl.text.trim();
+                String ten = tenCtrl.text.trim();
+
+                if (ma.isNotEmpty && ten.isNotEmpty) {
+                  // Tạo Object SanPham
+                  final spMoi = SanPham(ma: ma, ten: ten, gia: gia, giamGia: giam);
+
+                  // Gọi Provider để lưu vào DB
+                  context.read<SanPhamProvider>().addSanPham(spMoi);
+
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Lưu'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
